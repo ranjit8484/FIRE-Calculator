@@ -275,7 +275,10 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.header("Year by Year Projection")
-    styled = highlight_style(df)
+    # Remove the first column if needed (original code had Portfolio Start first)
+    df_display = df.copy()
+    df_display = df_display[df_display.columns[1:]]  # drop first column
+    styled = highlight_style(df_display)
     st.dataframe(styled, height=650)
 
     excel_bytes = to_excel_with_highlight(df)
@@ -317,17 +320,18 @@ with col2:
     st.pyplot(fig)
 
     # ---------------------------
-    # Key metrics
+    # Key metrics stacked vertically
     # ---------------------------
-    colA, colB, colC = st.columns(3)
+    st.subheader("Key Metrics")
     
     current_portfolio = df["Portfolio Start"].iloc[0]
+    retirement_portfolio = df["Portfolio End"].iloc[retirement_age - df["Age"].iloc[0]]
     ending_portfolio = portfolio_end[-1]
     first_neg_rows = df[df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float) < 0]
 
-    colA.metric(f"Portfolio at Age {int(df['Age'].iloc[0])}", f"${int(current_portfolio):,}")
-    colB.metric(f"Portfolio at Retirement Age {retirement_age}", f"${int(df['Portfolio End'].iloc[retirement_age - df['Age'].iloc[0]]):,}")
-    colC.metric("Portfolio at End Age", f"${int(ending_portfolio):,}")
+    st.markdown(f"**Portfolio at Age {int(df['Age'].iloc[0])}:** ${int(current_portfolio):,}")
+    st.markdown(f"**Portfolio at Retirement Age {retirement_age}:** ${int(retirement_portfolio):,}")
+    st.markdown(f"**Portfolio at End Age {int(df['Age'].iloc[-1])}:** ${int(ending_portfolio):,}")
 
     if not first_neg_rows.empty:
         first_neg_age = int(first_neg_rows["Age"].iloc[0])
