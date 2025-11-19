@@ -228,12 +228,15 @@ mortgage_annual_payment = st.sidebar.number_input("Annual contribution toward mo
 
 # Big-ticket one-time expenses
 st.sidebar.subheader("Big-ticket one-time expenses")
-big1_age = st.sidebar.number_input("Big Expense 1 Age", value=55, min_value=current_age, max_value=projection_end_age)
+big1_age = st.sidebar.number_input("Big Expense 1 Age", value=55, min_value=starting_age, max_value=projection_end_age)
 big1_amount = st.sidebar.number_input("Big Expense 1 Amount ($)", value=100000, step=1000)
-big2_age = st.sidebar.number_input("Big Expense 2 Age", value=projection_end_age, min_value=current_age, max_value=projection_end_age)
-big2_amount = st.sidebar.number_input("Big Expense 2 Amount ($)", value=0, step=1000)
-big3_age = st.sidebar.number_input("Big Expense 3 Age", value=projection_end_age, min_value=current_age, max_value=projection_end_age)
+
+big2_age = st.sidebar.number_input("Big Expense 2 Age", value=57, min_value=starting_age, max_value=projection_end_age)  # default 57
+big2_amount = st.sidebar.number_input("Big Expense 2 Amount ($)", value=100000, step=1000)  # default 100k
+
+big3_age = st.sidebar.number_input("Big Expense 3 Age", value=projection_end_age, min_value=starting_age, max_value=projection_end_age)
 big3_amount = st.sidebar.number_input("Big Expense 3 Amount ($)", value=0, step=1000)
+
 
 # ---------------------------
 # Build inputs dictionary
