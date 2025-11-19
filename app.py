@@ -279,6 +279,24 @@ if selected_model != "--select--":
     for key, value in loaded_inputs.items():
         st.session_state[key] = value
     st.sidebar.success(f"Loaded model '{selected_model}'")
+st.sidebar.subheader("Manage Saved Models")
+
+# List all saved models
+saved_files = []
+if os.path.exists("saved_models"):
+    saved_files = [f for f in os.listdir("saved_models") if f.endswith(".json")]
+
+# Dropdown to select model to delete
+if saved_files:
+    model_to_delete = st.sidebar.selectbox("Select a model to delete", ["--select--"] + saved_files)
+    if model_to_delete != "--select--" and st.sidebar.button("Delete selected model"):
+        try:
+            os.remove(f"saved_models/{model_to_delete}")
+            st.sidebar.success(f"Deleted model '{model_to_delete}'")
+        except Exception as e:
+            st.sidebar.error(f"Error deleting model: {e}")
+else:
+    st.sidebar.write("No saved models yet.")
 
 df = build_projection(inputs)
 
