@@ -125,11 +125,31 @@ def to_excel_with_highlight(df):
     return output.getvalue()
 
 def highlight_style(df):
-    sty = df.style.apply(lambda r: ["background-color: #fff2cc" if r["Portfolio End"] < 0 else "" for _ in r], axis=1)
-    money_cols = ["Portfolio Start","Contribution","Growth","Inflated Spending","Buffer Spending","Social Security","Mortgage Payment","Total Spending","Portfolio End"]
+    # List of monetary columns
+    money_cols = [
+        "Portfolio Start","Contribution","Growth",
+        "Inflated Spending","Buffer Spending",
+        "Social Security","Mortgage Payment","Total Spending","Portfolio End"
+    ]
+
+    # Pre-format money columns as strings with $
+    df_formatted = df.copy()
     for col in money_cols:
-        if col in df.columns:
-            sty = sty.format({col: "${:,.0f}"})
+        if col in df_formatted.columns:
+            df_formatted[col] = df_formatted[col].apply(lambda x: "${:,.0f}".format(x))
+
+    # Apply row highlighting for negative portfolio
+    def highlight_neg(row):
+        try:
+            portfolio_end = float(row["Portfolio End"].replace('$','').replace(',',''))
+        except:
+            portfolio_end = 0
+        if portfolio_end < 0:
+            return ["background-color: #fff2cc" for _ in row]
+        else:
+            return [""] * len(row)
+
+    sty = df_formatted.style.apply(highlight_neg, axis=1)
     sty = sty.set_properties(**{"text-align": "right"})
     return sty
 
