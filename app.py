@@ -40,6 +40,13 @@ def build_projection(inputs):
     mortgage_balance_remaining = float(inputs["mortgage_balance"])
     mortgage_annual_payment = float(inputs["mortgage_annual_payment"])
 
+    # Big-ticket expenses
+    big_expenses = {
+        inputs.get("big1_age", 0): inputs.get("big1_amount", 0),
+        inputs.get("big2_age", 0): inputs.get("big2_amount", 0),
+        inputs.get("big3_age", 0): inputs.get("big3_amount", 0),
+    }
+
     for age in ages:
         row = {}
         row["Age"] = age
@@ -84,8 +91,12 @@ def build_projection(inputs):
             mp = 0.0
         row["Mortgage Payment"] = mp
 
-        # Total spending net of SS plus mortgage
-        total_spend = inflated_spend + buffer - ss + mp
+        # Big-ticket expense for this year
+        big_ticket = big_expenses.get(age, 0.0)
+        row["Big Ticket"] = big_ticket
+
+        # Total spending net of SS plus mortgage plus big-ticket
+        total_spend = inflated_spend + buffer + big_ticket - ss + mp
         row["Total Spending"] = total_spend
 
         # End of year portfolio
@@ -125,20 +136,17 @@ def to_excel_with_highlight(df):
     return output.getvalue()
 
 def highlight_style(df):
-    # List of monetary columns
     money_cols = [
         "Portfolio Start","Contribution","Growth",
-        "Inflated Spending","Buffer Spending",
+        "Inflated Spending","Buffer Spending","Big Ticket",
         "Social Security","Mortgage Payment","Total Spending","Portfolio End"
     ]
 
-    # Pre-format money columns as strings with $
     df_formatted = df.copy()
     for col in money_cols:
         if col in df_formatted.columns:
             df_formatted[col] = df_formatted[col].apply(lambda x: "${:,.0f}".format(x))
 
-    # Apply row highlighting for negative portfolio
     def highlight_neg(row):
         try:
             portfolio_end = float(row["Portfolio End"].replace('$','').replace(',',''))
@@ -164,7 +172,7 @@ projection_end_age = st.sidebar.number_input("Projection end age", value=100, mi
 
 # Sticky retirement age
 if "retirement_age" not in st.session_state:
-    st.session_state.retirement_age = 60
+    st.session_state.retirement_age = 48
 retirement_age = st.sidebar.number_input(
     "Retirement age",
     min_value=projection_start_age,
@@ -189,8 +197,8 @@ buffer_spending = st.sidebar.number_input("Annual buffer spending ($)", value=0,
 annual_contribution = st.sidebar.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
 
 st.sidebar.subheader("Returns and inflation (percent)")
-pre_ret_return_pc = st.sidebar.number_input("Pre-retirement return percent", value=6.0)
-post_ret_return_pc = st.sidebar.number_input("Post-retirement return percent", value=4.0)
+pre_ret_return_pc = st.sidebar.number_input("Pre-retirement return percent", value=12.0)
+post_ret_return_pc = st.sidebar.number_input("Post-retirement return percent", value=8.0)
 inflation_pc = st.sidebar.number_input("Inflation percent", value=3.0)
 
 pre_ret_return = pct_to_decimal(pre_ret_return_pc)
@@ -205,6 +213,14 @@ ss_inflation_adjust = st.sidebar.checkbox("Inflation adjust Social Security afte
 st.sidebar.subheader("Mortgage")
 mortgage_balance = st.sidebar.number_input("Mortgage balance ($)", value=250000, step=1000)
 mortgage_annual_payment = st.sidebar.number_input("Annual contribution toward mortgage ($)", value=30000, step=500)
+
+st.sidebar.subheader("Big-ticket one-time expenses")
+big1_age = st.sidebar.number_input("Big Expense 1 Age", value=55, min_value=projection_start_age, max_value=projection_end_age)
+big1_amount = st.sidebar.number_input("Big Expense 1 Amount ($)", value=100000, step=1000)
+big2_age = st.sidebar.number_input("Big Expense 2 Age", value=projection_end_age, min_value=projection_start_age, max_value=projection_end_age)
+big2_amount = st.sidebar.number_input("Big Expense 2 Amount ($)", value=0, step=1000)
+big3_age = st.sidebar.number_input("Big Expense 3 Age", value=projection_end_age, min_value=projection_start_age, max_value=projection_end_age)
+big3_amount = st.sidebar.number_input("Big Expense 3 Amount ($)", value=0, step=1000)
 
 # ---------------------------
 # Projection
@@ -226,6 +242,12 @@ inputs = dict(
     mortgage_balance=mortgage_balance,
     mortgage_annual_payment=mortgage_annual_payment,
     portfolio_at_45=portfolio_at_45,
+    big1_age=big1_age,
+    big1_amount=big1_amount,
+    big2_age=big2_age,
+    big2_amount=big2_amount,
+    big3_age=big3_age,
+    big3_amount=big3_amount,
 )
 
 df = build_projection(inputs)
@@ -246,7 +268,7 @@ with col1:
 with col2:
     st.header("Charts and key metrics")
     ages = df["Age"].to_numpy()
-    portfolio_start = df["Portfolio Start"].to_numpy()
+    portfolio_start = df["Portfolio Start"].replace('[\$,]', '', regex=True).astype(float).to_numpy()  # convert $ strings to float
 
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(ages, portfolio_start / 1e6, marker="o", label="Portfolio Start (millions)", linewidth=2)
@@ -262,13 +284,13 @@ with col2:
     st.pyplot(fig)
 
     last_row = df.iloc[-1]
-    current_portfolio = df.iloc[0]["Portfolio Start"]
-    ending_portfolio = last_row["Portfolio End"]
-    negative_rows = df[df["Portfolio End"] < 0]
+    current_portfolio = df.iloc[0]["Portfolio Start"].replace('$','').replace(',','')
+    ending_portfolio = last_row["Portfolio End"].replace('$','').replace(',','')
+    negative_rows = df[df["Portfolio End"].str.replace('$','').str.replace(',','').astype(float) < 0]
 
     st.subheader("Quick summary")
-    st.metric(label=f"Portfolio at age {int(df.iloc[0]['Age'])}", value=f"${int(current_portfolio):,}")
-    st.metric(label=f"Portfolio at age {int(df.iloc[-1]['Age'])}", value=f"${int(ending_portfolio):,}")
+    st.metric(label=f"Portfolio at age {int(df.iloc[0]['Age'])}", value=f"${int(float(current_portfolio)):,}")
+    st.metric(label=f"Portfolio at age {int(df.iloc[-1]['Age'])}", value=f"${int(float(ending_portfolio)):,}")
     if not negative_rows.empty:
         first_neg_age = int(negative_rows.iloc[0]["Age"])
         st.error(f"Portfolio becomes negative at age {first_neg_age}")
@@ -281,6 +303,7 @@ st.write(
     """
     • Spending starts at retirement and inflates each year using the inflation rate.
     • Buffer spending (travel, weddings, etc.) inflates similarly.
+    • Big-ticket expenses can occur in specific years only.
     • Social Security can be inflation-adjusted after the chosen start age.
     • Mortgage is automatically reduced each year using your annual contribution until balance reaches 0.
     • Contributions stop at retirement age.
