@@ -17,11 +17,6 @@ def pct_to_decimal(val_pct):
     except:
         return 0.0
 
-def format_currency(x):
-    if pd.isna(x):
-        return ""
-    return "${:,.0f}".format(x)
-
 def build_projection(inputs):
     start_age = int(inputs["projection_start_age"])
     end_age = int(inputs["projection_end_age"])
@@ -34,6 +29,7 @@ def build_projection(inputs):
     portfolio = float(inputs["portfolio_at_45"])
     starting_age = int(inputs["starting_age"])
     annual_spending_today = float(inputs["annual_spending_today"])
+    buffer_spending_today = float(inputs.get("buffer_spending", 0.0))
     inflation = float(inputs["inflation"])
     annual_contribution = float(inputs["annual_contribution"])
     pre_ret_return = float(inputs["pre_ret_return"])
@@ -61,10 +57,14 @@ def build_projection(inputs):
         # Spending after retirement
         if age < retirement_age:
             inflated_spend = 0.0
+            buffer = 0.0
         else:
             years_since_start = age - starting_age
             inflated_spend = annual_spending_today * ((1 + inflation) ** years_since_start)
+            buffer = buffer_spending_today * ((1 + inflation) ** years_since_start)
+
         row["Inflated Spending"] = inflated_spend
+        row["Buffer Spending"] = buffer
 
         # Social Security
         if age >= ss_start_age:
@@ -85,7 +85,7 @@ def build_projection(inputs):
         row["Mortgage Payment"] = mp
 
         # Total spending net of SS plus mortgage
-        total_spend = inflated_spend - ss + mp
+        total_spend = inflated_spend + buffer - ss + mp
         row["Total Spending"] = total_spend
 
         # End of year portfolio
@@ -126,7 +126,7 @@ def to_excel_with_highlight(df):
 
 def highlight_style(df):
     sty = df.style.apply(lambda r: ["background-color: #fff2cc" if r["Portfolio End"] < 0 else "" for _ in r], axis=1)
-    money_cols = ["Portfolio Start","Contribution","Growth","Inflated Spending","Social Security","Mortgage Payment","Total Spending","Portfolio End"]
+    money_cols = ["Portfolio Start","Contribution","Growth","Inflated Spending","Buffer Spending","Social Security","Mortgage Payment","Total Spending","Portfolio End"]
     for col in money_cols:
         if col in df.columns:
             sty = sty.format({col: "${:,.0f}"})
@@ -165,6 +165,7 @@ st.session_state.portfolio_at_45 = portfolio_at_45
 
 st.sidebar.subheader("Spending and contributions")
 annual_spending_today = st.sidebar.number_input("Annual spending today ($)", value=200000, step=1000)
+buffer_spending = st.sidebar.number_input("Annual buffer spending ($)", value=0, step=1000)
 annual_contribution = st.sidebar.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
 
 st.sidebar.subheader("Returns and inflation (percent)")
@@ -194,6 +195,7 @@ inputs = dict(
     projection_end_age=projection_end_age,
     retirement_age=retirement_age,
     annual_spending_today=annual_spending_today,
+    buffer_spending=buffer_spending,
     inflation=inflation,
     annual_contribution=annual_contribution,
     pre_ret_return=pre_ret_return,
@@ -258,6 +260,7 @@ st.write("Model notes")
 st.write(
     """
     • Spending starts at retirement and inflates each year using the inflation rate.
+    • Buffer spending (travel, weddings, etc.) inflates similarly.
     • Social Security can be inflation-adjusted after the chosen start age.
     • Mortgage is automatically reduced each year using your annual contribution until balance reaches 0.
     • Contributions stop at retirement age.
