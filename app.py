@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 from openpyxl.styles import PatternFill
 import openpyxl
-import math
 
 st.set_page_config(layout="wide", page_title="Interactive FIRE Model")
 
@@ -44,7 +43,6 @@ def build_projection(inputs):
     ss_annual_benefit = float(inputs["ss_annual_benefit"])
     ss_inflation_adjust = inputs.get("ss_inflation_adjust", True)
 
-    # optional mortgage amortization (simple): we only model payment outflow, not balance amortization
     mortgage_payment = float(inputs["mortgage_annual_payment"]) if inputs["mortgage_balance"]>0 else 0.0
 
     for age in ages:
@@ -61,26 +59,25 @@ def build_projection(inputs):
         growth = portfolio * ret_rate
         row["Growth"] = growth
 
-        # spending: starts at retirement and inflates each year thereafter or can be modeled differently
+        # spending: starts at retirement and inflates each year thereafter
         if age < retirement_age:
             inflated_spend = 0.0
         else:
-            # inflate spending from today's spending measured at starting_age (your base)
             years_since_start = age - starting_age
             inflated_spend = annual_spending_today * ((1 + inflation) ** years_since_start)
         row["Inflated Spending"] = inflated_spend
 
-        # Social Security: optional inflation adjustment from ss_start_age
+        # Social Security: optional inflation adjustment
         if age >= ss_start_age:
             if ss_inflation_adjust:
-                ss = ss_annual_benefit * ((1 + inflation) ** max(0, age - ss_start_age))
+                ss = ss_annual_benefit * ((1 + inflation) ** (age - ss_start_age))
             else:
                 ss = ss_annual_benefit
         else:
             ss = 0.0
         row["Social Security"] = ss
 
-        # Mortgage payment until mortgage_end_age (if mortgage_balance > 0)
+        # Mortgage payment until mortgage_end_age
         mp = mortgage_payment if (inputs["mortgage_balance"] > 0 and start_age <= age <= mortgage_end_age) else 0.0
         row["Mortgage Payment"] = mp
 
@@ -99,7 +96,6 @@ def build_projection(inputs):
     return df
 
 def to_excel_with_highlight(df):
-    # Write df to excel and highlight rows where Portfolio End < 0
     output = BytesIO()
     with pd.ExcelWriter(output, engine="openpyxl") as writer:
         df.to_excel(writer, index=False, sheet_name="Projection")
@@ -107,7 +103,6 @@ def to_excel_with_highlight(df):
         worksheet = writer.sheets["Projection"]
 
         red_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-        # find column index for 'Portfolio End'
         headers = [cell.value for cell in worksheet[1]]
         try:
             pe_col_idx = headers.index("Portfolio End") + 1
@@ -124,16 +119,10 @@ def to_excel_with_highlight(df):
                 except:
                     pass
 
-    processed = output.getvalue()
-    return processed
+    return output.getvalue()
 
 def highlight_style(df):
-    # Returns a pandas Styler that highlights negative Portfolio End in red text
-    def style_row(r):
-        return ["background-color: #fff2cc" if (r.name and r["Portfolio End"] < 0) else "" for _ in r]
-    # safer: apply per-row
     sty = df.style.apply(lambda r: ["background-color: #fff2cc" if r["Portfolio End"] < 0 else "" for _ in r], axis=1)
-    # format currency columns
     for col in ["Portfolio Start", "Contribution", "Growth", "Inflated Spending", "Social Security", "Mortgage Payment", "Total Spending", "Portfolio End"]:
         if col in df.columns:
             sty = sty.format({col: "${:,.0f}"})
@@ -145,39 +134,37 @@ def highlight_style(df):
 # ---------------------------
 st.sidebar.header("Inputs and Assumptions")
 
-# personal
-starting_age = st.sidebar.number_input("Your current age", value=41, min_value=18, max_value=100, step=1)
-projection_start_age = st.sidebar.number_input("Projection start age (first row)", value=45, min_value=starting_age, max_value=100, step=1)
-projection_end_age = st.sidebar.number_input("Projection end age", value=100, min_value=projection_start_age, max_value=120, step=1)
-retirement_age = st.sidebar.number_input("Retirement age", value=60, min_value=projection_start_age, max_value=projection_end_age, step=1)
+starting_age = st.sidebar.number_input("Your current age", value=41, min_value=18, max_value=100)
+projection_start_age = st.sidebar.number_input("Projection start age (first row)", value=45, min_value=starting_age, max_value=100)
+projection_end_age = st.sidebar.number_input("Projection end age", value=100, min_value=projection_start_age, max_value=120)
+retirement_age = st.sidebar.number_input("Retirement age", value=60, min_value=projection_start_age, max_value=projection_end_age)
 
 st.sidebar.subheader("Spending and contributions")
-annual_spending_today = st.sidebar.number_input("Annual spending today (your target in today's dollars)", value=200000, step=1000, format="$%d")
-buffer_travel_wedding = st.sidebar.number_input("Travel/wedding one-off buffer (optional)", value=0, step=500, format="$%d")
-annual_contribution = st.sidebar.number_input("Annual contributions pre-retirement", value=100000, step=1000, format="$%d")
+annual_spending_today = st.sidebar.number_input("Annual spending today ($)", value=200000, step=1000)
+buffer_travel_wedding = st.sidebar.number_input("Travel/wedding one-off buffer ($)", value=0, step=500)
+annual_contribution = st.sidebar.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
 
 st.sidebar.subheader("Returns and inflation (enter percent as numbers, e.g., 3 for 3%)")
-pre_ret_return_pc = st.sidebar.number_input("Pre-retirement return percent", value=6.0, format="%.2f")
-post_ret_return_pc = st.sidebar.number_input("Post-retirement return percent", value=4.0, format="%.2f")
-inflation_pc = st.sidebar.number_input("Inflation percent", value=3.0, format="%.2f")
+pre_ret_return_pc = st.sidebar.number_input("Pre-retirement return percent", value=6.0)
+post_ret_return_pc = st.sidebar.number_input("Post-retirement return percent", value=4.0)
+inflation_pc = st.sidebar.number_input("Inflation percent", value=3.0)
 
-# convert to decimals for math
 pre_ret_return = pct_to_decimal(pre_ret_return_pc)
 post_ret_return = pct_to_decimal(post_ret_return_pc)
 inflation = pct_to_decimal(inflation_pc)
 
 st.sidebar.subheader("Social Security")
-ss_start_age = st.sidebar.number_input("SS start age", value=67, min_value=62, max_value=75, step=1)
-ss_annual_benefit = st.sidebar.number_input("SS annual benefit today", value=65000, step=1000, format="$%d")
+ss_start_age = st.sidebar.number_input("SS start age", value=67, min_value=62, max_value=75)
+ss_annual_benefit = st.sidebar.number_input("SS annual benefit today ($)", value=65000, step=1000)
 ss_inflation_adjust = st.sidebar.checkbox("Inflation adjust Social Security after start age", value=True)
 
 st.sidebar.subheader("Mortgage")
-mortgage_balance = st.sidebar.number_input("Mortgage balance", value=250000, step=1000, format="$%d")
-mortgage_annual_payment = st.sidebar.number_input("Mortgage annual payment", value=30000, step=500, format="$%d")
-mortgage_end_age = st.sidebar.number_input("Mortgage end age", value=55, min_value=projection_start_age, max_value=projection_end_age, step=1)
+mortgage_balance = st.sidebar.number_input("Mortgage balance ($)", value=250000, step=1000)
+mortgage_annual_payment = st.sidebar.number_input("Mortgage annual payment ($)", value=30000, step=500)
+mortgage_end_age = st.sidebar.number_input("Mortgage end age", value=55, min_value=projection_start_age, max_value=projection_end_age)
 
 st.sidebar.subheader("Portfolio")
-portfolio_at_45 = st.sidebar.number_input("Portfolio at projection start age (age {})".format(projection_start_age), value=1550000.0, step=1000.0, format="$%.2f")
+portfolio_at_45 = st.sidebar.number_input(f"Portfolio at projection start age ({projection_start_age}) ($)", value=1550000.0, step=1000.0)
 
 st.sidebar.write("---")
 st.sidebar.write("Quick scenarios")
@@ -186,7 +173,6 @@ if st.sidebar.button("Conservative preset"):
     post_ret_return_pc = 4.0
     inflation_pc = 3.0
     annual_contribution = 100000
-    portfolio_at_45 = portfolio_at_45  # unchanged
     st.experimental_rerun()
 
 if st.sidebar.button("Aggressive preset"):
@@ -196,28 +182,27 @@ if st.sidebar.button("Aggressive preset"):
     annual_contribution = 150000
     st.experimental_rerun()
 
-# pack inputs dict
 inputs = dict(
-    starting_age = starting_age,
-    projection_start_age = projection_start_age,
-    projection_end_age = projection_end_age,
-    retirement_age = retirement_age,
-    annual_spending_today = annual_spending_today,
-    inflation = inflation,
-    annual_contribution = annual_contribution,
-    pre_ret_return = pre_ret_return,
-    post_ret_return = post_ret_return,
-    ss_start_age = ss_start_age,
-    ss_annual_benefit = ss_annual_benefit,
-    ss_inflation_adjust = ss_inflation_adjust,
-    mortgage_balance = mortgage_balance,
-    mortgage_annual_payment = mortgage_annual_payment,
-    mortgage_end_age = mortgage_end_age,
-    portfolio_at_45 = portfolio_at_45,
+    starting_age=starting_age,
+    projection_start_age=projection_start_age,
+    projection_end_age=projection_end_age,
+    retirement_age=retirement_age,
+    annual_spending_today=annual_spending_today,
+    inflation=inflation,
+    annual_contribution=annual_contribution,
+    pre_ret_return=pre_ret_return,
+    post_ret_return=post_ret_return,
+    ss_start_age=ss_start_age,
+    ss_annual_benefit=ss_annual_benefit,
+    ss_inflation_adjust=ss_inflation_adjust,
+    mortgage_balance=mortgage_balance,
+    mortgage_annual_payment=mortgage_annual_payment,
+    mortgage_end_age=mortgage_end_age,
+    portfolio_at_45=portfolio_at_45,
 )
 
 # ---------------------------
-# Basic validation
+# Validation
 # ---------------------------
 if retirement_age < projection_start_age:
     st.sidebar.error("Retirement age must be >= projection start age")
@@ -228,16 +213,15 @@ if projection_end_age < projection_start_age:
     st.stop()
 
 # ---------------------------
-# Model build and UI layout
+# Projection
 # ---------------------------
 df = build_projection(inputs)
 
-# left: table, right: charts and KPIs
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.header("Year by year projection")
-    st.write("Tip: change assumptions on the left. All currency fields are shown as dollars.")
+    st.write("Tip: All currency fields are shown in $")
     styled = highlight_style(df)
     st.dataframe(styled, height=650)
 
@@ -246,8 +230,6 @@ with col1:
 
 with col2:
     st.header("Charts and key metrics")
-
-    # portfolio path chart with negative shading
     ages = df["Age"].to_numpy()
     portfolio_start = df["Portfolio Start"].to_numpy()
     portfolio_end = df["Portfolio End"].to_numpy()
@@ -255,11 +237,8 @@ with col2:
     fig, ax = plt.subplots(figsize=(6, 4))
     ax.plot(ages, portfolio_start / 1e6, marker="o", label="Portfolio Start (millions)", linewidth=2)
 
-    # shade negative regions on portfolio_start (start of year)
-    # find segments where portfolio_start < 0
     negative_mask = portfolio_start < 0
     if negative_mask.any():
-        # For visual clarity, fill between for negative portions
         ax.fill_between(ages, portfolio_start / 1e6, 0, where=negative_mask, interpolate=True, color="salmon", alpha=0.5, label="Negative balance")
 
     ax.set_xlabel("Age")
@@ -268,7 +247,6 @@ with col2:
     ax.legend()
     st.pyplot(fig)
 
-    # key summary metrics
     last_row = df.iloc[-1]
     current_portfolio = df.iloc[0]["Portfolio Start"]
     ending_portfolio = last_row["Portfolio End"]
@@ -291,10 +269,10 @@ st.markdown("---")
 st.write("Model notes")
 st.write(
     """
-    • Spending is modeled to start at retirement age and is inflated from today's spending each year using the inflation rate input.
+    • Spending starts at retirement and inflates each year using the inflation rate.
     • Social Security can be inflation-adjusted after the chosen start age.
-    • Mortgage is represented as a constant annual payment until mortgage end age. The balance is not amortized in detail here.
+    • Mortgage is modeled as a constant annual payment until mortgage end age.
     • Contributions stop at retirement age.
-    • Pre-retirement and post-retirement return rates are applied to the start-of-year portfolio.
+    • Pre- and post-retirement returns are applied to start-of-year portfolio.
     """
 )
