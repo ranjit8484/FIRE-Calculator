@@ -269,47 +269,72 @@ inputs = dict(
 df = build_projection(inputs)
 
 # ---------------------------
-# Dashboard Layout
+# Display table and charts
 # ---------------------------
-col1, col2 = st.columns([2,1])
+col1, col2 = st.columns([2, 1])
 
 with col1:
-    st.header("Year-by-Year Projection")
-    st.dataframe(highlight_style(df), height=650)
+    st.header("Year by Year Projection")
+    styled = highlight_style(df)
+    st.dataframe(styled, height=650)
 
     excel_bytes = to_excel_with_highlight(df)
-    st.download_button("Download Excel", excel_bytes, file_name="fire_projection.xlsx",
-                       mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    st.download_button(
+        "Download projection as Excel",
+        excel_bytes,
+        file_name="fire_projection.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
 
 with col2:
-    st.header("Portfolio Overview")
+    st.header("Charts and Key Metrics")
     ages = df["Age"].to_numpy()
-    portfolio_start = df["Portfolio Start"].replace('[\$,]', '', regex=True).astype(float)
-    portfolio_end = df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float)
-
-    fig, ax = plt.subplots(figsize=(6,4))
-    ax.plot(ages, portfolio_start/1e6, marker='o', label="Portfolio Start (M)")
-    ax.plot(ages, portfolio_end/1e6, marker='x', linestyle='--', label="Portfolio End (M)")
-    ax.axhline(0, color='red', linestyle=':', label="Zero Portfolio")
-    ax.fill_between(ages, 0, portfolio_end/1e6, where=(portfolio_end<0), color="salmon", alpha=0.5)
+    
+    # Convert monetary columns from string ($) to float for plotting
+    portfolio_start = df["Portfolio Start"].replace('[\$,]', '', regex=True).astype(float).to_numpy()
+    portfolio_end = df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float).to_numpy()
+    
+    fig, ax = plt.subplots(figsize=(6, 4))
+    ax.plot(ages, portfolio_start / 1e6, marker="o", label="Portfolio Start (millions)", linewidth=2)
+    
+    negative_mask = portfolio_start < 0
+    if negative_mask.any():
+        ax.fill_between(
+            ages,
+            portfolio_start / 1e6,
+            0,
+            where=negative_mask,
+            interpolate=True,
+            color="salmon",
+            alpha=0.5,
+            label="Negative balance"
+        )
+    
     ax.set_xlabel("Age")
-    ax.set_ylabel("Portfolio (Millions)")
+    ax.set_ylabel("Portfolio Start (Millions)")
     ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     st.pyplot(fig)
 
-    st.subheader("Key Metrics")
+    # ---------------------------
+    # Key metrics
+    # ---------------------------
     colA, colB, colC = st.columns(3)
-    colA.metric("Portfolio Today", f"${int(portfolio_start[0]):,}")
-    colB.metric("Portfolio at Retirement", f"${int(portfolio_end[retirement_age - current_age]):,}")
-    colC.metric("Portfolio at End Age", f"${int(portfolio_end[-1]):,}")
+    
+    current_portfolio = df["Portfolio Start"].iloc[0]
+    ending_portfolio = portfolio_end[-1]
+    first_neg_rows = df[df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float) < 0]
 
-    negative_rows = df[portfolio_end<0]
-    if not negative_rows.empty:
-        first_neg_age = int(negative_rows.iloc[0]["Age"])
+    colA.metric(f"Portfolio at Age {int(df['Age'].iloc[0])}", f"${int(current_portfolio):,}")
+    colB.metric(f"Portfolio at Retirement Age {retirement_age}", f"${int(df['Portfolio End'].iloc[retirement_age - df['Age'].iloc[0]]):,}")
+    colC.metric("Portfolio at End Age", f"${int(ending_portfolio):,}")
+
+    if not first_neg_rows.empty:
+        first_neg_age = int(first_neg_rows["Age"].iloc[0])
         st.error(f"Portfolio becomes negative at age {first_neg_age}")
     else:
         st.success("Portfolio stays positive through projection end age")
+
 
 st.markdown("---")
 st.write("**Model Notes:**")
