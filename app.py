@@ -160,95 +160,108 @@ def highlight_style(df):
 # ---------------------------
 # Sidebar inputs
 # ---------------------------
-st.sidebar.header("Inputs & Assumptions")
+st.sidebar.header("Inputs and Assumptions")
 
-with st.sidebar.expander("Personal Info", expanded=True):
-    current_age = st.number_input("Current age", value=41, min_value=18, max_value=100)
-    if "retirement_age" not in st.session_state:
-        st.session_state.retirement_age = 48
-    retirement_age = st.number_input("Retirement age", min_value=current_age, max_value=120,
-                                     value=st.session_state.retirement_age)
-    st.session_state.retirement_age = retirement_age
+# Current age (start of projection)
+current_age = st.sidebar.number_input(
+    "Your current age",
+    value=41,
+    min_value=18,
+    max_value=100
+)
 
-    if "portfolio_at_current_age" not in st.session_state:
-        st.session_state.portfolio_at_current_age = 1550000
-    portfolio_at_current_age = st.number_input("Portfolio at current age ($)", 
-                                               value=st.session_state.portfolio_at_current_age, step=1000)
-    st.session_state.portfolio_at_current_age = portfolio_at_current_age
+# Projection end age
+projection_end_age = st.sidebar.number_input(
+    "Projection end age",
+    min_value=current_age,
+    max_value=120,
+    value=100
+)
 
-with st.sidebar.expander("Spending & Contributions", expanded=False):
-    annual_spending_today = st.number_input("Annual spending today ($)", value=200000, step=1000)
-    buffer_spending = st.number_input("Annual buffer spending ($)", value=0, step=1000)
-    annual_contribution = st.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
+# Sticky retirement age
+if "retirement_age" not in st.session_state:
+    st.session_state.retirement_age = 48
+retirement_age = st.sidebar.number_input(
+    "Retirement age",
+    min_value=current_age,
+    max_value=projection_end_age,
+    value=st.session_state.retirement_age
+)
+st.session_state.retirement_age = retirement_age
 
-with st.sidebar.expander("Returns & Inflation", expanded=False):
-    pre_ret_return_pc = st.number_input("Pre-retirement return (%)", value=12.0)
-    post_ret_return_pc = st.number_input("Post-retirement return (%)", value=8.0)
-    inflation_pc = st.number_input("Inflation (%)", value=3.0)
+# Sticky portfolio at current age
+if "portfolio_at_current_age" not in st.session_state:
+    st.session_state.portfolio_at_current_age = 1550000.0
+portfolio_at_current_age = st.sidebar.number_input(
+    f"Portfolio at current age ({current_age}) ($)",
+    value=st.session_state.portfolio_at_current_age,
+    step=1000.0
+)
+st.session_state.portfolio_at_current_age = portfolio_at_current_age
 
-with st.sidebar.expander("Social Security", expanded=False):
-    ss_start_age = st.number_input("SS start age", value=67, min_value=62, max_value=75)
-    ss_annual_benefit = st.number_input("SS annual benefit today ($)", value=65000, step=1000)
-    ss_inflation_adjust = st.checkbox("Inflation adjust Social Security after start age", value=True)
+# Spending and contributions
+st.sidebar.subheader("Spending and contributions")
+annual_spending_today = st.sidebar.number_input("Annual spending today ($)", value=200000, step=1000)
+buffer_spending = st.sidebar.number_input("Annual buffer spending ($)", value=0, step=1000)
+annual_contribution = st.sidebar.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
 
-with st.sidebar.expander("Mortgage", expanded=False):
-    mortgage_balance = st.number_input("Mortgage balance ($)", value=250000, step=1000)
-    mortgage_annual_payment = st.number_input("Annual mortgage contribution ($)", value=30000, step=500)
+# Returns and inflation
+st.sidebar.subheader("Returns and inflation (percent)")
+pre_ret_return_pc = st.sidebar.number_input("Pre-retirement return percent", value=12.0)
+post_ret_return_pc = st.sidebar.number_input("Post-retirement return percent", value=8.0)
+inflation_pc = st.sidebar.number_input("Inflation percent", value=3.0)
 
-with st.sidebar.expander("Big-ticket Expenses", expanded=False):
-    big1_age = st.number_input("Big Expense 1 Age", value=55, min_value=current_age, max_value=100)
-    big1_amount = st.number_input("Big Expense 1 Amount ($)", value=100000, step=1000)
-    big2_age = st.number_input("Big Expense 2 Age", value=100, min_value=current_age, max_value=100)
-    big2_amount = st.number_input("Big Expense 2 Amount ($)", value=0, step=1000)
-    big3_age = st.number_input("Big Expense 3 Age", value=100, min_value=current_age, max_value=100)
-    big3_amount = st.number_input("Big Expense 3 Amount ($)", value=0, step=1000)
+pre_ret_return = pct_to_decimal(pre_ret_return_pc)
+post_ret_return = pct_to_decimal(post_ret_return_pc)
+inflation = pct_to_decimal(inflation_pc)
 
-with st.sidebar.expander("Save / Load / Delete Models", expanded=False):
-    inputs = dict(
-        current_age=current_age,
-        retirement_age=retirement_age,
-        annual_spending_today=annual_spending_today,
-        buffer_spending=buffer_spending,
-        annual_contribution=annual_contribution,
-        pre_ret_return=pct_to_decimal(pre_ret_return_pc),
-        post_ret_return=pct_to_decimal(post_ret_return_pc),
-        inflation=pct_to_decimal(inflation_pc),
-        ss_start_age=ss_start_age,
-        ss_annual_benefit=ss_annual_benefit,
-        ss_inflation_adjust=ss_inflation_adjust,
-        mortgage_balance=mortgage_balance,
-        mortgage_annual_payment=mortgage_annual_payment,
-        portfolio_at_current_age=portfolio_at_current_age,
-        big1_age=big1_age, big1_amount=big1_amount,
-        big2_age=big2_age, big2_amount=big2_amount,
-        big3_age=big3_age, big3_amount=big3_amount
-    )
+# Social Security
+st.sidebar.subheader("Social Security")
+ss_start_age = st.sidebar.number_input("SS start age", value=67, min_value=62, max_value=75)
+ss_annual_benefit = st.sidebar.number_input("SS annual benefit today ($)", value=65000, step=1000)
+ss_inflation_adjust = st.sidebar.checkbox("Inflation adjust Social Security after start age", value=True)
 
-    model_name = st.text_input("Model name to save", value="my_model")
-    if st.button("Save current model"):
-        if not os.path.exists("saved_models"):
-            os.mkdir("saved_models")
-        with open(f"saved_models/{model_name}.json", "w") as f:
-            json.dump(inputs, f, indent=2)
-        st.success(f"Model '{model_name}' saved!")
+# Mortgage
+st.sidebar.subheader("Mortgage")
+mortgage_balance = st.sidebar.number_input("Mortgage balance ($)", value=250000, step=1000)
+mortgage_annual_payment = st.sidebar.number_input("Annual contribution toward mortgage ($)", value=30000, step=500)
 
-    # Load
-    saved_files = [f for f in os.listdir("saved_models") if f.endswith(".json")] if os.path.exists("saved_models") else []
-    selected_model = st.selectbox("Load saved model", ["--select--"] + saved_files)
-    if selected_model != "--select--":
-        with open(f"saved_models/{selected_model}", "r") as f:
-            loaded_inputs = json.load(f)
-        inputs.update(loaded_inputs)
-        for key, value in loaded_inputs.items():
-            st.session_state[key] = value
-        st.success(f"Loaded model '{selected_model}'")
+# Big-ticket one-time expenses
+st.sidebar.subheader("Big-ticket one-time expenses")
+big1_age = st.sidebar.number_input("Big Expense 1 Age", value=55, min_value=current_age, max_value=projection_end_age)
+big1_amount = st.sidebar.number_input("Big Expense 1 Amount ($)", value=100000, step=1000)
+big2_age = st.sidebar.number_input("Big Expense 2 Age", value=projection_end_age, min_value=current_age, max_value=projection_end_age)
+big2_amount = st.sidebar.number_input("Big Expense 2 Amount ($)", value=0, step=1000)
+big3_age = st.sidebar.number_input("Big Expense 3 Age", value=projection_end_age, min_value=current_age, max_value=projection_end_age)
+big3_amount = st.sidebar.number_input("Big Expense 3 Amount ($)", value=0, step=1000)
 
-    # Delete
-    if saved_files:
-        model_to_delete = st.selectbox("Select model to delete", ["--select--"] + saved_files, key="delete_select")
-        if model_to_delete != "--select--" and st.button("Delete selected model"):
-            os.remove(f"saved_models/{model_to_delete}")
-            st.success(f"Deleted model '{model_to_delete}'")
+# ---------------------------
+# Build inputs dictionary
+# ---------------------------
+inputs = dict(
+    current_age=current_age,
+    projection_end_age=projection_end_age,
+    retirement_age=retirement_age,
+    annual_spending_today=annual_spending_today,
+    buffer_spending=buffer_spending,
+    inflation=inflation,
+    annual_contribution=annual_contribution,
+    pre_ret_return=pre_ret_return,
+    post_ret_return=post_ret_return,
+    ss_start_age=ss_start_age,
+    ss_annual_benefit=ss_annual_benefit,
+    ss_inflation_adjust=ss_inflation_adjust,
+    mortgage_balance=mortgage_balance,
+    mortgage_annual_payment=mortgage_annual_payment,
+    portfolio_at_current_age=portfolio_at_current_age,
+    big1_age=big1_age,
+    big1_amount=big1_amount,
+    big2_age=big2_age,
+    big2_amount=big2_amount,
+    big3_age=big3_age,
+    big3_amount=big3_amount,
+)
+
 
 # ---------------------------
 # Build Projection
