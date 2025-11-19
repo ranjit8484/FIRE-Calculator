@@ -278,11 +278,10 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.header("Year by Year Projection")
-    # Remove the first column if needed (original code had Portfolio Start first)
     df_display = df.copy()
-    df_display = df_display[df_display.columns[1:]]  # drop first column
+    df_display = df_display[df_display.columns[1:]]  # start with Age column
     styled = highlight_style(df_display)
-    st.dataframe(styled, height=650)
+    st.dataframe(styled, height=700)
 
     excel_bytes = to_excel_with_highlight(df)
     st.download_button(
@@ -294,15 +293,20 @@ with col1:
 
 with col2:
     st.header("Charts and Key Metrics")
-    ages = df["Age"].to_numpy()
     
-    # Convert monetary columns from string ($) to float for plotting
+    # Portfolio arrays
+    ages = df["Age"].to_numpy()
     portfolio_start = df["Portfolio Start"].replace('[\$,]', '', regex=True).astype(float).to_numpy()
     portfolio_end = df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float).to_numpy()
-    
-    fig, ax = plt.subplots(figsize=(6, 4))
+
+    # Bigger chart
+    fig, ax = plt.subplots(figsize=(8,5))
     ax.plot(ages, portfolio_start / 1e6, marker="o", label="Portfolio Start (millions)", linewidth=2)
-    
+    ax.set_xlabel("Age")
+    ax.set_ylabel("Portfolio Start (Millions)")
+    ax.grid(True, linestyle="--", alpha=0.5)
+
+    # Highlight negative balances
     negative_mask = portfolio_start < 0
     if negative_mask.any():
         ax.fill_between(
@@ -315,32 +319,31 @@ with col2:
             alpha=0.5,
             label="Negative balance"
         )
-    
-    ax.set_xlabel("Age")
-    ax.set_ylabel("Portfolio Start (Millions)")
-    ax.grid(True, linestyle="--", alpha=0.5)
     ax.legend()
     st.pyplot(fig)
 
-    # ---------------------------
-    # Key metrics stacked vertically
-    # ---------------------------
+    # Key metrics stacked in cards
     st.subheader("Key Metrics")
-    
     current_portfolio = df["Portfolio Start"].iloc[0]
     retirement_portfolio = df["Portfolio End"].iloc[retirement_age - df["Age"].iloc[0]]
     ending_portfolio = portfolio_end[-1]
     first_neg_rows = df[df["Portfolio End"].replace('[\$,]', '', regex=True).astype(float) < 0]
 
-    st.markdown(f"**Portfolio at Age {int(df['Age'].iloc[0])}:** ${int(current_portfolio):,}")
-    st.markdown(f"**Portfolio at Retirement Age {retirement_age}:** ${int(retirement_portfolio):,}")
-    st.markdown(f"**Portfolio at End Age {int(df['Age'].iloc[-1])}:** ${int(ending_portfolio):,}")
+    st.metric(label=f"Portfolio at Age {int(df['Age'].iloc[0])}", value=f"${int(current_portfolio):,}", delta_color="normal")
+    st.metric(label=f"Portfolio at Retirement Age {retirement_age}", value=f"${int(retirement_portfolio):,}", delta_color="normal")
+    st.metric(label=f"Portfolio at End Age {int(df['Age'].iloc[-1])}", value=f"${int(ending_portfolio):,}", delta_color="normal")
 
     if not first_neg_rows.empty:
         first_neg_age = int(first_neg_rows["Age"].iloc[0])
         st.error(f"Portfolio becomes negative at age {first_neg_age}")
     else:
         st.success("Portfolio stays positive through projection end age")
+
+    # Extra summary
+    st.markdown("### Summary")
+    st.markdown(f"- Total Contributions Pre-Retirement: ${int(df['Contribution'].sum()):,}")
+    st.markdown(f"- Total Spending: ${int(df['Total Spending'].sum()):,}")
+    st.markdown(f"- Total Growth: ${int(df['Growth'].sum()):,}")
 
 
 st.markdown("---")
