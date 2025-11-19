@@ -249,6 +249,36 @@ inputs = dict(
     big3_age=big3_age,
     big3_amount=big3_amount,
 )
+import json
+import os
+
+st.sidebar.subheader("Save / Load Models")
+
+# --- Save current model ---
+model_name = st.sidebar.text_input("Model name to save", value="my_model")
+if st.sidebar.button("Save current model"):
+    if not os.path.exists("saved_models"):
+        os.mkdir("saved_models")
+    with open(f"saved_models/{model_name}.json", "w") as f:
+        json.dump(inputs, f, indent=2)
+    st.sidebar.success(f"Model '{model_name}' saved!")
+
+# --- Load saved model ---
+saved_files = []
+if os.path.exists("saved_models"):
+    saved_files = [f for f in os.listdir("saved_models") if f.endswith(".json")]
+
+selected_model = st.sidebar.selectbox("Load saved model", ["--select--"] + saved_files)
+
+if selected_model != "--select--":
+    with open(f"saved_models/{selected_model}", "r") as f:
+        loaded_inputs = json.load(f)
+    # Overwrite current inputs
+    inputs.update(loaded_inputs)
+    # Update session_state to reflect in widgets
+    for key, value in loaded_inputs.items():
+        st.session_state[key] = value
+    st.sidebar.success(f"Loaded model '{selected_model}'")
 
 df = build_projection(inputs)
 
