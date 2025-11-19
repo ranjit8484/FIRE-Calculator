@@ -284,9 +284,9 @@ with col2:
     st.pyplot(fig)
 
     last_row = df.iloc[-1]
-    current_portfolio = df.iloc[0]["Portfolio Start"].replace('$','').replace(',','')
-    ending_portfolio = last_row["Portfolio End"].replace('$','').replace(',','')
-    negative_rows = df[df["Portfolio End"].str.replace('$','').str.replace(',','').astype(float) < 0]
+    current_portfolio = df.iloc[0]["Portfolio Start"]
+    ending_portfolio = last_row["Portfolio End"]
+    negative_rows = df[df["Portfolio End"] < 0]
 
     st.subheader("Quick summary")
     st.metric(label=f"Portfolio at age {int(df.iloc[0]['Age'])}", value=f"${int(float(current_portfolio)):,}")
