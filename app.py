@@ -1,5 +1,8 @@
 # app.py
 import streamlit as st
+# Initialize saved models in session_state
+if "saved_models" not in st.session_state:
+    st.session_state.saved_models = {}
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
