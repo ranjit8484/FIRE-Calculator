@@ -217,62 +217,29 @@ with st.sidebar.expander("Big-ticket Expenses (one-time)", expanded=False):
     big3_age = st.number_input("Big Expense 3 Age", value=80, min_value=starting_age, max_value=projection_end_age)
     big3_amount = st.number_input("Big Expense 3 Amount ($)", value=200000, step=1000)
 
-# ---------------------------
-# Save / Load / Delete Models
-# ---------------------------
-st.sidebar.markdown("---")
-st.sidebar.subheader("Save / Load Models")
+# -------------------------------------------
+# Save / Load / Delete Models (Sidebar)
+# -------------------------------------------
+st.sidebar.markdown("### Save or Load a Model")
 
-inputs = dict(
-    starting_age=starting_age,
-    projection_end_age=projection_end_age,
-    retirement_age=retirement_age,
-    annual_spending_today=annual_spending_today,
-    annual_contribution=annual_contribution,
-    pre_ret_return=pre_ret_return,
-    post_ret_return=post_ret_return,
-    inflation=inflation,
-    ss_start_age=ss_start_age,
-    ss_annual_benefit=ss_annual_benefit,
-    ss_inflation_adjust=ss_inflation_adjust,
-    mortgage_balance=mortgage_balance,
-    mortgage_annual_payment=mortgage_annual_payment,
-    portfolio_at_start=portfolio_at_start,
-    big1_age=big1_age, big1_amount=big1_amount,
-    big2_age=big2_age, big2_amount=big2_amount,
-    big3_age=big3_age, big3_amount=big3_amount
-)
+model_name = st.sidebar.text_input("Model Name")
 
-# Save
-model_name = st.text_input("Model name to save", value="my_model")
-if st.button("Save current model"):
-    if not os.path.exists("saved_models"):
-        os.mkdir("saved_models")
-    with open(f"saved_models/{model_name}.json", "w") as f:
-        json.dump(inputs, f, indent=2)
-    st.success(f"Model '{model_name}' saved!")
+if st.sidebar.button("Save Model"):
+    st.session_state.saved_models[model_name] = inputs
+    st.sidebar.success("Model saved!")
 
-# Load
-saved_files = [f for f in os.listdir("saved_models") if f.endswith(".json")] if os.path.exists("saved_models") else []
-selected_model = st.selectbox("Load saved model", ["--select--"] + saved_files)
-if selected_model != "--select--":
-    with open(f"saved_models/{selected_model}", "r") as f:
-        loaded_inputs = json.load(f)
-    # update inputs and session state
-    inputs.update(loaded_inputs)
-    for k, v in loaded_inputs.items():
-        st.session_state[k] = v
-    st.success(f"Loaded model '{selected_model}'")
+selected_model = st.sidebar.selectbox("Load Saved Model", [""] + list(st.session_state.saved_models.keys()))
 
-# Delete
-if saved_files:
-    model_to_delete = st.selectbox("Select a model to delete", ["--select--"] + saved_files, key="delete_select")
-    if model_to_delete != "--select--" and st.button("Delete selected model"):
-        try:
-            os.remove(f"saved_models/{model_to_delete}")
-            st.success(f"Deleted model '{model_to_delete}'")
-        except Exception as e:
-            st.error(f"Error deleting model: {e}")
+if selected_model != "":
+    if st.sidebar.button("Load Model"):
+        for key in inputs:
+            inputs[key] = st.session_state.saved_models[selected_model][key]
+        st.sidebar.success(f"Model {selected_model} loaded!")
+
+if st.sidebar.button("Delete Model"):
+    if selected_model in st.session_state.saved_models:
+        del st.session_state.saved_models[selected_model]
+        st.sidebar.success("Model deleted!")
 
 # ---------------------------
 # Build projection and UI outputs
