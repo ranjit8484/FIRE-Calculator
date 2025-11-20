@@ -1,20 +1,22 @@
 # app.py
 import streamlit as st
-# Initialize saved models in session_state
-if "saved_models" not in st.session_state:
-    st.session_state.saved_models = {}
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from io import BytesIO
 from openpyxl.styles import PatternFill
-import json
-import os
-
-st.set_page_config(layout="wide", page_title="Interactive FIRE Model")
 
 # ---------------------------
-# Helpers
+# Page setup
+# ---------------------------
+st.set_page_config(layout="wide", page_title="Interactive FIRE Model")
+
+# Initialize saved models in session_state
+if "saved_models" not in st.session_state:
+    st.session_state.saved_models = {}
+
+# ---------------------------
+# Helper functions
 # ---------------------------
 def pct_to_decimal(val_pct):
     try:
@@ -75,21 +77,17 @@ def build_projection(inputs):
             inflated_spend = 0.0
         else:
             years_since_retirement = age - retirement_age
-            # Inflate from retirement year (spending is defined in today's dollars)
             inflated_spend = annual_spending_today * ((1 + inflation) ** years_since_retirement)
         row["Inflated Spending"] = inflated_spend
 
         # Social Security (starts at ss_start_age)
         if age >= ss_start_age:
-            if ss_inflation_adjust:
-                ss = ss_annual_benefit * ((1 + inflation) ** (age - ss_start_age))
-            else:
-                ss = ss_annual_benefit
+            ss = ss_annual_benefit * ((1 + inflation) ** (age - ss_start_age)) if ss_inflation_adjust else ss_annual_benefit
         else:
             ss = 0.0
         row["Social Security"] = ss
 
-        # Mortgage payment: reduce remaining balance by annual mortgage contribution until zero
+        # Mortgage payment
         if mortgage_balance_remaining > 0:
             mp = min(mortgage_balance_remaining, mortgage_annual_payment)
             mortgage_balance_remaining -= mp
@@ -97,11 +95,11 @@ def build_projection(inputs):
             mp = 0.0
         row["Mortgage Payment"] = mp
 
-        # Big-ticket one-time expense this year (no inflation applied to the given amount)
+        # Big-ticket one-time expense
         big_ticket = big_expenses.get(age, 0.0)
         row["Big Ticket"] = big_ticket
 
-        # Total spending net of SS plus mortgage and plus big-ticket
+        # Total spending net of SS plus mortgage plus big-ticket
         total_spend = inflated_spend - ss + mp + big_ticket
         row["Total Spending"] = total_spend
 
@@ -168,7 +166,7 @@ def highlight_style(df):
     return sty
 
 # ---------------------------
-# Sidebar inputs (grouped, clean)
+# Sidebar Inputs
 # ---------------------------
 st.sidebar.header("Inputs & Assumptions")
 
@@ -190,8 +188,7 @@ with st.sidebar.expander("Personal", expanded=True):
     st.session_state.portfolio_at_start = portfolio_at_start
 
 with st.sidebar.expander("Spending & Contributions", expanded=False):
-    annual_spending_today = st.number_input("Annual spending today (today's $)", value=200000, step=1000,
-                                           help="This is your target annual spending in today's dollars (will be used after retirement).")
+    annual_spending_today = st.number_input("Annual spending today (today's $)", value=200000, step=1000)
     annual_contribution = st.number_input("Annual contributions pre-retirement ($)", value=100000, step=1000)
 
 with st.sidebar.expander("Returns & Inflation", expanded=False):
@@ -220,10 +217,34 @@ with st.sidebar.expander("Big-ticket Expenses (one-time)", expanded=False):
     big3_age = st.number_input("Big Expense 3 Age", value=80, min_value=starting_age, max_value=projection_end_age)
     big3_amount = st.number_input("Big Expense 3 Amount ($)", value=200000, step=1000)
 
-# -------------------------------------------
-# Save / Load / Delete Models (Sidebar)
-# -------------------------------------------
+# ---------------------------
+# Save / Load / Delete Models
+# ---------------------------
 st.sidebar.markdown("### Save or Load a Model")
+
+# Inputs dictionary to save/load
+inputs = {
+    "starting_age": starting_age,
+    "projection_end_age": projection_end_age,
+    "retirement_age": retirement_age,
+    "ss_start_age": ss_start_age,
+    "portfolio_at_start": portfolio_at_start,
+    "annual_spending_today": annual_spending_today,
+    "inflation": inflation,
+    "annual_contribution": annual_contribution,
+    "pre_ret_return": pre_ret_return,
+    "post_ret_return": post_ret_return,
+    "ss_annual_benefit": ss_annual_benefit,
+    "ss_inflation_adjust": ss_inflation_adjust,
+    "mortgage_balance": mortgage_balance,
+    "mortgage_annual_payment": mortgage_annual_payment,
+    "big1_age": big1_age,
+    "big1_amount": big1_amount,
+    "big2_age": big2_age,
+    "big2_amount": big2_amount,
+    "big3_age": big3_age,
+    "big3_amount": big3_amount,
+}
 
 model_name = st.sidebar.text_input("Model Name")
 
@@ -245,32 +266,27 @@ if st.sidebar.button("Delete Model"):
         st.sidebar.success("Model deleted!")
 
 # ---------------------------
-# Build projection and UI outputs
+# Build projection and UI
 # ---------------------------
 df = build_projection(inputs)
 
-# Compute target portfolio at retirement using 4% SWR (user chose 4%)
+# Compute target portfolio at retirement using 4% SWR
 SWR = 0.04
 target_portfolio = annual_spending_today / SWR
-# Projected portfolio at retirement (positionally find retirement age row)
 age_index = retirement_age - df["Age"].iloc[0]
-if 0 <= age_index < len(df):
-    projected_at_retirement = df["Portfolio End"].iloc[int(age_index)]
-else:
-    projected_at_retirement = df["Portfolio End"].iloc[-1]
+projected_at_retirement = df["Portfolio End"].iloc[int(age_index)] if 0 <= age_index < len(df) else df["Portfolio End"].iloc[-1]
 
-# Top Goal Dashboard
+# ---------------------------
+# Goal Dashboard (Top)
+# ---------------------------
 st.markdown("## Goal Dashboard")
 dash_col1, dash_col2, dash_col3 = st.columns([1,1,1])
-
 with dash_col1:
-    st.markdown(f"**Age to retire**")
+    st.markdown("**Age to retire**")
     st.write(f"{retirement_age}")
-
 with dash_col2:
     st.markdown("**Investment needed at retirement (4% SWR)**")
     st.write(money(target_portfolio))
-
 with dash_col3:
     st.markdown("**Portfolio at current age**")
     st.write(money(portfolio_at_start))
@@ -286,13 +302,11 @@ with dash_col5:
 st.markdown("---")
 
 # ---------------------------
-# Main layout: table (left) and chart/summary (right)
+# Main Layout: Table and Chart
 # ---------------------------
 col1, col2 = st.columns([2,1])
-
 with col1:
     st.header("Year-by-Year Projection")
-    # Table should start with Age column (Age is first column in df)
     styled = highlight_style(df)
     st.dataframe(styled, height=700)
     excel_bytes = to_excel_with_highlight(df)
@@ -308,7 +322,6 @@ with col2:
     ax.plot(ages, portfolio_start / 1e6, marker="o", label="Portfolio Start (M)", linewidth=2)
     ax.plot(ages, df["Portfolio End"].to_numpy() / 1e6, marker="x", linestyle="--", label="Portfolio End (M)")
     ax.axhline(0, color="red", linestyle=":", label="Zero")
-    # highlight negative portfolio_end
     portfolio_end_vals = df["Portfolio End"].to_numpy()
     ax.fill_between(ages, portfolio_end_vals / 1e6, 0, where=(portfolio_end_vals < 0), color="salmon", alpha=0.4)
     ax.set_xlabel("Age")
